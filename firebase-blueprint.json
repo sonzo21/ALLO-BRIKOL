@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Base user profile for both clients and artisans",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "city": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "artisan"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Artisan": {
+      "title": "Artisan",
+      "description": "Detailed professional profile for artisans",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "city": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "description": { "type": "string" },
+        "categories": { "type": "array", "items": { "type": "string" } },
+        "hourlyRate": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "integer" },
+        "availability": { "type": "object" }
+      },
+      "required": ["uid", "categories", "city"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Service categories (Plumbing, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameFr": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "icon": { "type": "string" }
+      }
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Client reviews for artisans",
+      "type": "object",
+      "properties": {
+        "artisanId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ServiceRequest": {
+      "title": "Service Request",
+      "description": "Client job postings",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "city": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Conversation between client and artisan",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Individual chat message",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/artisans/{artisanId}": { "schema": "Artisan", "description": "Artisan professional data" },
+    "/categories/{categoryId}": { "schema": "Category", "description": "Service categories" },
+    "/reviews/{reviewId}": { "schema": "Review", "description": "Artisan reviews" },
+    "/requests/{requestId}": { "schema": "ServiceRequest", "description": "Client job postings" },
+    "/chats/{chatId}": { "schema": "Chat", "description": "Conversations" },
+    "/chats/{chatId}/messages/{messageId}": { "schema": "Message", "description": "Chat messages" }
+  }
+}

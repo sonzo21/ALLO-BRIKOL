@@ -1,0 +1,228 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: userId (Auth UID)
+// Fields:
+//   - uid: string (required) - Firebase Auth UID
+//   - email: string (required) - User email
+//   - displayName: string - User display name
+//   - phoneNumber: string - User phone number
+//   - city: string - User city
+//   - photoURL: string - User photo URL
+//   - role: string (required, enum: ['client', 'artisan']) - User role
+//   - createdAt: timestamp - Creation time
+//
+// Collection: artisans
+// Document ID: artisanId (Auth UID)
+// Fields:
+//   - uid: string (required) - Auth UID
+//   - firstName: string - Artisan first name
+//   - lastName: string - Artisan last name
+//   - phoneNumber: string - Artisan phone number
+//   - city: string - Artisan city
+//   - photoURL: string - Artisan photo URL
+//   - description: string - Professional description
+//   - categories: list (required) - List of service categories
+//   - hourlyRate: number - Hourly rate
+//   - isActive: bool - Availability status
+//   - rating: number - Average rating
+//   - reviewCount: int - Number of reviews
+//   - availability: map - Availability schedule
+//
+// Collection: reviews
+// Document ID: reviewId
+// Fields:
+//   - artisanId: string (required) - Target artisan UID
+//   - clientId: string (required) - Reviewer UID
+//   - clientName: string - Reviewer name
+//   - rating: number (required, 1-5) - Rating
+//   - comment: string - Review text
+//   - createdAt: timestamp - Creation time
+//
+// Collection: requests
+// Document ID: requestId
+// Fields:
+//   - clientId: string (required) - Requester UID
+//   - clientName: string - Requester name
+//   - title: string (required) - Request title
+//   - description: string - Request details
+//   - city: string - Target city
+//   - category: string - Service category
+//   - status: string (enum: ['open', 'closed']) - Request status
+//   - createdAt: timestamp - Creation time
+//
+// Collection: chats
+// Document ID: chatId
+// Fields:
+//   - participants: list (required) - List of participant UIDs
+//   - lastMessage: string - Last message text
+//   - updatedAt: timestamp - Last update time
+//
+// Collection: chats/{chatId}/messages
+// Document ID: messageId
+// Fields:
+//   - chatId: string (required) - Chat ID
+//   - senderId: string (required) - Sender UID
+//   - text: string (required) - Message text
+//   - createdAt: timestamp - Creation time
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isBootstrapAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email == "elmahdilaaboudi@gmail.com" && 
+             request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() ||
+        (isAuthenticated() &&
+         exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function isParticipant(participants) {
+      return isAuthenticated() && request.auth.uid in participants;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidRating(rating) {
+      return rating is number && rating >= 1 && rating <= 5;
+    }
+
+    function isRecent(time) {
+      return time is timestamp && time > request.time - duration.value(5, 'm') && time <= request.time;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'displayName', 'phoneNumber', 'city', 'photoURL', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['client', 'artisan', 'admin'] &&
+             data.get('displayName', '') is string &&
+             data.get('phoneNumber', '') is string &&
+             data.get('city', '') is string;
+    }
+
+    function isValidArtisan(data) {
+      return hasRequiredFields(['uid', 'categories', 'city']) &&
+             hasOnlyAllowedFields(['uid', 'firstName', 'lastName', 'phoneNumber', 'city', 'photoURL', 'description', 'categories', 'hourlyRate', 'isActive', 'rating', 'reviewCount', 'availability']) &&
+             data.uid is string &&
+             data.categories is list &&
+             data.city is string &&
+             data.get('firstName', '') is string &&
+             data.get('lastName', '') is string &&
+             data.get('description', '') is string &&
+             data.get('hourlyRate', 0) is number &&
+             data.get('isActive', true) is bool;
+    }
+
+    function isValidReview(data) {
+      return hasRequiredFields(['artisanId', 'clientId', 'rating']) &&
+             data.clientId == request.auth.uid &&
+             isValidRating(data.rating) &&
+             data.get('comment', '') is string &&
+             data.get('clientName', '') is string;
+    }
+
+    function isValidRequest(data) {
+      return hasRequiredFields(['clientId', 'title', 'category', 'city']) &&
+             data.clientId == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.category is string &&
+             data.city is string &&
+             data.get('status', 'open') in ['open', 'closed'];
+    }
+
+    function isValidMessage(data) {
+      return hasRequiredFields(['chatId', 'senderId', 'text']) &&
+             data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 2000;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if (isOwner(userId) && isValidUser(request.resource.data)) || isAdmin() || userId.startsWith('sample_');
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data)) || isAdmin();
+    }
+
+    match /artisans/{artisanId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || artisanId.startsWith('sample_');
+      allow update: if (isAuthenticated() && (isOwner(artisanId) || isAdmin())) || artisanId.startsWith('sample_');
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin() || categoryId in ['menuiserie', 'plomberie', 'electricite', 'peinture', 'maconnerie', 'climatisation', 'serrurerie', 'tv_reparation'];
+    }
+
+    match /test/{testId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidReview(request.resource.data);
+      allow update: if isOwner(request.resource.data.clientId) && isValidReview(request.resource.data);
+      allow delete: if isOwner(resource.data.clientId);
+    }
+
+    match /requests/{requestId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidRequest(request.resource.data);
+      allow update: if isOwner(resource.data.clientId) && isValidRequest(request.resource.data);
+      allow delete: if isOwner(resource.data.clientId);
+    }
+
+    match /chats/{chatId} {
+      allow read: if isParticipant(resource.data.participants);
+      allow create: if isAuthenticated() && isParticipant(request.resource.data.participants);
+      allow update: if isParticipant(resource.data.participants);
+
+      match /messages/{messageId} {
+        allow read: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants) && isValidMessage(request.resource.data);
+      }
+    }
+  }
+}
